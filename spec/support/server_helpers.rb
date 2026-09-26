@@ -42,7 +42,7 @@ module ServerHelpers
     nil
   end
 
-def monotonic_now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  def monotonic_now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
   def debounce(connection, key, timeout, seq: 1)
     sent_at = monotonic_now
