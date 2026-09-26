@@ -125,7 +125,7 @@ module Debounced
     end
 
     def transmit(message)
-      socket.send serialize_message(message), 0
+      socket.write(serialize_message(message))
     end
 
     def server_name
