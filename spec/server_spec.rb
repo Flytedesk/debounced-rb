@@ -52,6 +52,17 @@ RSpec.describe Debounced::Server do
       # then
       expect(message&.dig('callback', 'kwargs', 'test_id')).to eq('latest')
     end
+    
+    it 'publishes to another client when the requesting client has disconnected' do
+      # given
+      other_client
+      write_message(client, debounce_message('key', kwargs: { test_id: 'orphan' }))
+      client.close
+      # when
+      message = read_message(other_client)
+      # then
+      expect(message&.dig('callback', 'kwargs', 'test_id')).to eq('orphan')
+    end
   end
   
   it 'discards pending callbacks on reset' do
