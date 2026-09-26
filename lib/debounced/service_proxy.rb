@@ -48,6 +48,10 @@ module Debounced
           transmit(build_request(activity_descriptor, timeout, callback))
         end
       end
+    rescue IOError, SystemCallError, NoServerError => e
+      logger.warn("Unable to send #{activity_descriptor} to #{server_name} (#{e.message}); skipping debounce step.")
+      close
+      callback.call
     end
 
     ###
@@ -88,11 +92,13 @@ module Debounced
     private
 
     def close
-      return unless @socket
-
-      logger.debug("Closing connection to #{server_name}")
-      @socket.close
-      @socket = nil
+      @mutex.synchronize do
+        return unless @socket
+    
+        logger.debug("Closing connection to #{server_name}")
+        @socket.close
+        @socket = nil
+      end
     end
 
     def receive_message_from_server
@@ -125,7 +131,8 @@ module Debounced
     end
 
     def transmit(message)
-      socket.write(serialize_message(message))
+      connection = socket or raise NoServerError, "#{server_name} at #{socket_descriptor} not running"
+      connection.write(serialize_message(message))
     end
 
     def server_name

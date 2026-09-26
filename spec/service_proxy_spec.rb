@@ -59,6 +59,22 @@ RSpec.describe Debounced::ServiceProxy do
     Array.new(count) { queue.pop(timeout: [deadline - Time.now, 0].max) }.compact
   end
   
+  it 'invokes the callback directly when the connection breaks while sending' do
+    # given
+    allow(TestEvent).to receive(:publish2)
+    proxy = described_class.new
+    thread = proxy.listen
+    sleep 0.3
+    allow_any_instance_of(UNIXSocket).to receive(:write).and_raise(Errno::EPIPE)
+    # when
+    proxy.debounce_activity('key', 5, Debounced::Callback.new(class_name: 'TestEvent', method_name: 'publish2', args: ['x']))
+    # then
+    expect(TestEvent).to have_received(:publish2).with('x')
+  ensure
+    proxy.stop
+    thread.join(2)
+  end
+  
   context 'when requests are larger than the socket buffer' do
     let(:invoked) { Queue.new }
     let(:padding) { 'x' * 200_000 }
