@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The debounce server is now written in Ruby (`Debounced::Server`, on the `async` gem); Node.js is no longer required
 - Start it with `bundle exec rake debounced:server`, as before
 - Requires Ruby 3.3 or later
-- The server serves any number of connected processes and publishes each callback to the process that sent the latest request for its descriptor
+- The server serves any number of connected processes and debounces each process's descriptors separately, publishing each callback to the process that requested it
 
 ### Fixed
 

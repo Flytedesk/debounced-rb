@@ -2,7 +2,6 @@ require 'async'
 require 'async/notification'
 require 'io/event'
 require 'json'
-require 'set'
 require 'socket'
 
 module Debounced
@@ -12,13 +11,11 @@ module Debounced
       @timers = {}
       @queue = IO::Event::Timers.new
       @timer_scheduled = Async::Notification.new
-      @clients = Set.new
     end
 
     def listen
       remove_stale_socket_file
       Sync do |task|
-        @task = task
         server = bind_owner_only
         logger.info("#{self.class.name} listening on #{@socket_descriptor}")
         task.async { run_timers }
@@ -42,7 +39,6 @@ module Debounced
 
     def serve(connection)
       logger.info('Client connected')
-      @clients << connection
       while (line = connection.gets(ServiceProxy::DELIMITER, chomp: true))
         handle(line, connection)
       end
@@ -50,7 +46,7 @@ module Debounced
       logger.warn("Client connection error: #{e.message}")
     ensure
       logger.info('Client disconnected')
-      @clients.delete(connection)
+      cancel_timers(connection)
       connection.close
     end
 
@@ -67,13 +63,18 @@ module Debounced
 
     def debounce(data, connection)
       descriptor = data['descriptor']
-      @timers.delete(descriptor)&.cancel!
+      key = [connection, descriptor]
+      @timers.delete(key)&.cancel!
       logger.debug { "Debouncing #{descriptor}" }
-      @timers[descriptor] = @queue.after(data['timeout']) do
-        @timers.delete(descriptor)
+      @timers[key] = @queue.after(data['timeout']) do
+        @timers.delete(key)
         publish(descriptor, data['callback'], connection)
       end
       @timer_scheduled.signal
+    end
+
+    def cancel_timers(connection)
+      @timers.keys.select { |owner, _| owner == connection }.each { |key| @timers.delete(key).cancel! }
     end
 
     def run_timers
@@ -95,12 +96,8 @@ module Debounced
     end
 
     def publish(descriptor, callback, connection)
-      if @clients.include?(connection)
-        logger.debug { "Debounce period expired for #{descriptor}" }
-        send_message(connection, type: 'publishEvent', callback:)
-      else
-        logger.warn("Client disconnected; dropping #{descriptor}")
-      end
+      logger.debug { "Debounce period expired for #{descriptor}" }
+      send_message(connection, type: 'publishEvent', callback:)
     rescue IOError, SystemCallError => e
       logger.warn("Unable to publish #{descriptor}: #{e.message}")
     end
