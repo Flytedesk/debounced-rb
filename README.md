@@ -23,12 +23,6 @@ Or install it yourself as:
 $ gem install debounced
 ```
 
-## Dependencies
-
-This gem requires Node.js to be installed on your system, as it uses a Node.js server to handle the debouncing logic. You'll need:
-
-- Node.js >= 20.0.0
-
 ## Usage
 
 ### Configuration
@@ -43,10 +37,10 @@ end
 
 ### Starting the server
 
-Start the nodeJS debounce server with:
+Start the debounce server with:
 
 ```bash
-$ bundle exec debounced:server
+$ bundle exec rake debounced:server
 ```
 
 In your Ruby application code:
@@ -97,10 +91,10 @@ proxy.debounce_activity("my-event-123", 5, event.debounce_callback)
 
 ## How It Works
 
-1. The gem creates a Unix socket for communication between Ruby and Node.js
-2. When you call `debounce_activity`, it sends the event to the Node.js server
-3. The Node.js server restarts a timer every time an event with a given activity_descriptor is received
-4. When the timeout expires, it sends the event back to Ruby to be published
+1. The debounce server listens on a Unix socket and runs one lightweight timer per activity descriptor
+2. When you call `debounce_activity`, the proxy sends the descriptor, timeout and callback to the server
+3. Each new request for the same descriptor cancels its timer and starts a new one, keeping the latest callback
+4. When a timer expires, the server sends the callback back to the proxy, which invokes it
 
 ## License
 

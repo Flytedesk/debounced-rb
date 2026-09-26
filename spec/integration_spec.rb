@@ -1,5 +1,4 @@
 require 'spec_helper'
-require 'pathname'
 require 'test_event'
 
 RSpec.describe 'Debounced Events', type: :integration do
@@ -28,13 +27,12 @@ RSpec.describe 'Debounced Events', type: :integration do
 
   context 'with server running' do
     before :all do
-      gem_path = Pathname.new(Gem::Specification.find_by_name('debounced').gem_dir)
-      debounce_event_server_log = File.open(gem_path.join('debounce_server.log'), 'w')
-      gem_lib_path = gem_path.join('lib')
-      @node_pid = Process.spawn("node #{gem_lib_path}/debounced/javascript/server.mjs #{Debounced.configuration.socket_descriptor}",
-                                out: debounce_event_server_log,
-                                err: debounce_event_server_log)
-      Process.detach(@node_pid)
+      server_log = File.open('debounce_server.log', 'w')
+      @server_pid = Process.spawn(RbConfig.ruby, '-Ilib', '-rdebounced', '-rdebounced/server',
+                                  '-e', 'Debounced::Server.new(ARGV[0]).listen',
+                                  Debounced.configuration.socket_descriptor,
+                                  out: server_log, err: server_log)
+      Process.detach(@server_pid)
       sleep 0.5
     end
 
@@ -52,7 +50,7 @@ RSpec.describe 'Debounced Events', type: :integration do
     end
 
     after :all do
-      Process.kill('TERM', @node_pid)
+      Process.kill('TERM', @server_pid)
       sleep 0.5
     end
 
