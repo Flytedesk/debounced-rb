@@ -1,6 +1,7 @@
 require 'spec_helper'
 require 'debounced/server'
 require 'support/server_helpers'
+require 'test_event'
 
 RSpec.describe Debounced::ServiceProxy do
   include ServerHelpers
@@ -35,5 +36,22 @@ RSpec.describe Debounced::ServiceProxy do
   ensure
     proxies.each(&:stop)
     threads.each { _1.join(1) }
+  end
+  it 'invokes a callback promptly when it arrives just as an idle read times out' do
+    # given
+    allow(Debounced.configuration).to receive(:wait_timeout).and_return(1)
+    invoked_at = Queue.new
+    allow(TestEvent).to receive(:publish2) { invoked_at << Time.now }
+    proxy = described_class.new
+    thread = proxy.listen
+    sleep 0.9
+    sent_at = Time.now
+    # when
+    proxy.debounce_activity('key', 0.2, Debounced::Callback.new(class_name: 'TestEvent', method_name: 'publish2', args: ['x']))
+    # then
+    expect(invoked_at.pop(timeout: 3) - sent_at).to be < 0.6
+  ensure
+    proxy.stop
+    thread.join(2)
   end
 end

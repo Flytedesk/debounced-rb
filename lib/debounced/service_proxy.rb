@@ -107,7 +107,6 @@ module Debounced
       message
     rescue IO::TimeoutError
       logger_trace { "Timeout waiting for data" }
-      sleep wait_timeout
       nil
     rescue Errno::EPIPE, IOError, Errno::ECONNRESET
       close
