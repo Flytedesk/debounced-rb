@@ -1,5 +1,6 @@
 require 'spec_helper'
 require 'test_event'
+require 'tmpdir'
 
 RSpec.describe Debounced::Callback do
   describe '#call' do
@@ -102,6 +103,38 @@ RSpec.describe Debounced::Callback do
         described_class.new(class_name: 'NonCallbackable', method_name: 'run').call
         # then
         expect(logger).to have_received(:warn).with(/not an allowed Debounced callback target/)
+      end
+    end
+
+    context 'methods that are not part of the target class API' do
+      it 'refuses public reflection methods from core Ruby' do
+        # given
+        stub_const('Target', Class.new { include Debounced::Callbackable })
+        # when
+        described_class.new(class_name: 'Target', method_name: 'class_eval', args: ['$debounced_evaluated = true']).call
+        # then
+        expect($debounced_evaluated).to be_nil
+      end
+      
+      it 'refuses private Kernel methods' do
+        # given
+        stub_const('Target', Class.new { include Debounced::Callbackable })
+        marker = File.join(Dir.tmpdir, "debounced-system-#{Process.pid}")
+        # when
+        described_class.new(class_name: 'Target', method_name: 'system', method_args: ["touch #{marker}"]).call
+        # then
+        expect(File.exist?(marker)).to be(false)
+      end
+      
+      it 'allows class methods added by an extended module' do
+        # given
+        enqueuing = Module.new { def perform_later(id) = id }
+        stub_const('Target', Class.new { include Debounced::Callbackable; extend enqueuing })
+        allow(Target).to receive(:perform_later).and_call_original
+        # when
+        described_class.new(class_name: 'Target', method_name: 'perform_later', args: [7]).call
+        # then
+        expect(Target).to have_received(:perform_later).with(7)
       end
     end
   end

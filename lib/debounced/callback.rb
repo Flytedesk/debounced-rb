@@ -3,6 +3,8 @@ module Debounced
   ###
   # Represents a callback to be executed by the debounce service
   class Callback
+    CORE_RUBY_OWNERS = [BasicObject, Kernel, Object, Module, Class].freeze
+
     attr_accessor :class_name, :method_name, :args, :kwargs, :method_args, :method_kwargs
 
     ###
@@ -65,19 +67,32 @@ module Debounced
 
     def call
       Debounced.configuration.logger.debug("Invoking callback #{method_name}")
-      klass = Object.const_get(class_name)
-      unless klass.ancestors.include?(Debounced::Callbackable)
-        raise ArgumentError, "#{class_name} is not an allowed Debounced callback target. Include Debounced::Callbackable in the class."
-      end
+      klass = callback_class
       if klass.respond_to?(method_name)
-        klass.send(method_name, *args, **kwargs)
+        ensure_application_method(klass.method(method_name))
+        klass.public_send(method_name, *args, **kwargs)
       else
-        instance = klass.new(*args, **kwargs)
-        instance.send(method_name, *method_args, **method_kwargs)
+        ensure_application_method(klass.public_instance_method(method_name))
+        klass.new(*args, **kwargs).public_send(method_name, *method_args, **method_kwargs)
       end
     rescue StandardError => e
       Debounced.configuration.logger.warn("Unable to invoke callback #{as_json}: #{e.message}")
       Debounced.configuration.logger.warn(e.backtrace.join("\n"))
+    end
+
+    private
+
+    def callback_class
+      klass = Object.const_get(class_name)
+      return klass if klass.ancestors.include?(Debounced::Callbackable)
+
+      raise ArgumentError, "#{class_name} is not an allowed Debounced callback target. Include Debounced::Callbackable in the class."
+    end
+
+    def ensure_application_method(method)
+      return unless CORE_RUBY_OWNERS.include?(method.owner)
+
+      raise ArgumentError, "#{method_name} is a core Ruby method and not an allowed Debounced callback"
     end
   end
 end
