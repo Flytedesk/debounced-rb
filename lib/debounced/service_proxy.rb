@@ -65,7 +65,6 @@ module Debounced
           next unless message
 
           payload = deserialize_message(message)
-          raise SocketConflictError if payload['type'] == 'rejectClient'
 
           instantiate_callback(payload['callback']).call
         rescue Debounced::NoServerError => e
@@ -75,7 +74,7 @@ module Debounced
 
         close
       end
-    rescue SocketConflictError, StandardError => e
+    rescue StandardError => e
       logger.warn("Unable to listen for messages from #{server_name}: #{e.message}")
       logger.warn(e.backtrace.join("\n"))
     ensure

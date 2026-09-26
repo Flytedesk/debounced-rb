@@ -1,5 +1,6 @@
 require 'async'
 require 'json'
+require 'set'
 require 'socket'
 
 module Debounced
@@ -7,7 +8,7 @@ module Debounced
     def initialize(socket_descriptor)
       @socket_descriptor = socket_descriptor
       @timers = {}
-      @client = nil
+      @clients = Set.new
     end
 
     def listen
@@ -16,7 +17,10 @@ module Debounced
         @task = task
         server = bind_owner_only
         logger.info("#{self.class.name} listening on #{@socket_descriptor}")
-        loop { accept(server.accept) }
+        loop do
+          connection = server.accept
+          task.async { serve(connection) }
+        end
       ensure
         File.delete(@socket_descriptor) if server
       end
@@ -24,45 +28,31 @@ module Debounced
 
     private
 
-def bind_owner_only
+    def bind_owner_only
       previous_umask = File.umask(0o177)
       UNIXServer.new(@socket_descriptor)
     ensure
       File.umask(previous_umask)
     end
 
-    def accept(connection)
-      if @client
-        reject(connection)
-      else
-        @client = connection
-        @task.async { serve(connection) }
-      end
-    end
-
-    def reject(connection)
-      logger.warn('Rejecting connection: client already connected')
-      send_message(connection, type: 'rejectClient')
-      connection.close
-    end
-
     def serve(connection)
       logger.info('Client connected')
+      @clients << connection
       while (line = connection.gets(ServiceProxy::DELIMITER, chomp: true))
-        handle(line)
+        handle(line, connection)
       end
     rescue IOError, SystemCallError => e
       logger.warn("Client connection error: #{e.message}")
     ensure
       logger.info('Client disconnected')
-      @client = nil
+      @clients.delete(connection)
       connection.close
     end
 
-    def handle(line)
+    def handle(line, connection)
       message = JSON.parse(line)
       case message['type']
-      when 'debounceEvent' then debounce(message['data'])
+      when 'debounceEvent' then debounce(message['data'], connection)
       when 'reset' then reset
       else logger.warn("Unknown message: #{line}")
       end
@@ -70,23 +60,23 @@ def bind_owner_only
       logger.warn("Unable to parse message: #{e.message}")
     end
 
-    def debounce(data)
+    def debounce(data, connection)
       descriptor = data['descriptor']
       @timers.delete(descriptor)&.stop
       logger.debug { "Debouncing #{descriptor}" }
       @timers[descriptor] = @task.async do
         sleep data['timeout']
         @timers.delete(descriptor)
-        publish(descriptor, data['callback'])
+        publish(descriptor, data['callback'], connection)
       end
     end
 
-    def publish(descriptor, callback)
-      if @client
+    def publish(descriptor, callback, connection)
+      if @clients.include?(connection)
         logger.debug { "Debounce period expired for #{descriptor}" }
-        send_message(@client, type: 'publishEvent', callback:)
+        send_message(connection, type: 'publishEvent', callback:)
       else
-        logger.warn("No client connected; dropping #{descriptor}")
+        logger.warn("Client disconnected; dropping #{descriptor}")
       end
     end
 
@@ -101,7 +91,7 @@ def bind_owner_only
 
     def remove_stale_socket_file
       return unless File.exist?(@socket_descriptor)
-    
+
       UNIXSocket.new(@socket_descriptor).close
       raise SocketConflictError, "Another server is listening on #{@socket_descriptor}"
     rescue Errno::ECONNREFUSED
