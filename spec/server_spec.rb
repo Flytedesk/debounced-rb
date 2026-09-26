@@ -88,6 +88,21 @@ RSpec.describe Debounced::Server do
         .to match(['short', be_between(0.1, 0.1 + late_tolerance)])
     end
 
+    it "keeps firing other clients' timers while one client stops reading" do
+      # given
+      stuck = UNIXSocket.new(socket_path)
+      20.times { |i| write_message(stuck, debounce_message("stuck-#{i}", timeout: 0.05, kwargs: { test_id: 'x' * 100_000 })) }
+      sleep 0.3
+      sent_at = debounce(client, 'healthy', 0.1)
+      # when
+      message = read_message(client)
+      # then
+      expect([message&.dig('callback', 'kwargs', 'key'), monotonic_now - sent_at])
+        .to match(['healthy', be_between(0.1, 0.1 + late_tolerance)])
+    ensure
+      stuck&.close
+    end
+
     it 'never publishes a callback before its timeout' do
       # given
       timeouts = { 'a' => 0.3, 'b' => 0.05, 'c' => 0.2, 'd' => 0.1, 'e' => 0.15 }
