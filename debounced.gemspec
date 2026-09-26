@@ -8,7 +8,7 @@ Gem::Specification.new do |gem|
 
   gem.summary = "Efficient event debouncing in Ruby"
   gem.description = "Debounce Ruby callbacks across processes through a lightweight Ruby timer server"
-  gem.homepage = "https://github.com/flytedesk/debounced"
+  gem.homepage = "https://github.com/Flytedesk/debounced-rb"
   gem.license = "MIT"
   gem.required_ruby_version = ">= 3.3.0"
 
