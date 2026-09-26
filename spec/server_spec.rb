@@ -63,6 +63,15 @@ RSpec.describe Debounced::Server do
       # then
       expect(message).to be_nil
     end
+
+    it "discards every client's pending callbacks on reset" do
+      # given
+      write_message(other_client, debounce_message('key'))
+      # when
+      write_message(client, type: 'reset')
+      # then
+      expect(read_message(other_client, timeout: 0.3)).to be_nil
+    end
   end
 
   context 'with timers of different lengths' do

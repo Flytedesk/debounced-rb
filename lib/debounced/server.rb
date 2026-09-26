@@ -8,7 +8,7 @@ module Debounced
   class Server
     def initialize(socket_descriptor)
       @socket_descriptor = socket_descriptor
-      @timers = {}
+      @timers = Hash.new { |all, connection| all[connection] = {} }
       @queue = IO::Event::Timers.new
       @timer_scheduled = Async::Notification.new
     end
@@ -46,7 +46,7 @@ module Debounced
       logger.warn("Client connection error: #{e.message}")
     ensure
       logger.info('Client disconnected')
-      cancel_timers(connection)
+      @timers.delete(connection)&.each_value(&:cancel!)
       connection.close
     end
 
@@ -63,18 +63,14 @@ module Debounced
 
     def debounce(data, connection)
       descriptor = data['descriptor']
-      key = [connection, descriptor]
-      @timers.delete(key)&.cancel!
+      timers = @timers[connection]
+      timers.delete(descriptor)&.cancel!
       logger.debug { "Debouncing #{descriptor}" }
-      @timers[key] = @queue.after(data['timeout']) do
-        @timers.delete(key)
+      timers[descriptor] = @queue.after(data['timeout']) do
+        timers.delete(descriptor)
         publish(descriptor, data['callback'], connection)
       end
       @timer_scheduled.signal
-    end
-
-    def cancel_timers(connection)
-      @timers.keys.select { |owner, _| owner == connection }.each { |key| @timers.delete(key).cancel! }
     end
 
     def run_timers
@@ -103,8 +99,7 @@ module Debounced
     end
 
     def reset
-      @timers.each_value(&:cancel!)
-      @timers.clear
+      @timers.each_value { |timers| timers.each_value(&:cancel!).clear }
     end
 
     def send_message(connection, message)
