@@ -205,9 +205,55 @@ RSpec.describe Debounced::Server do
     end
   end
 
+  context 'after SIGTERM' do
+    let(:late_tolerance) { 0.05 }
+
+    it 'keeps firing pending timers on schedule' do
+      # given
+      sent_at = debounce(client, 'pending', 0.3)
+      Process.kill('TERM', server_pid)
+      # when
+      message = read_message(client)
+      # then
+      expect([message&.dig('callback', 'kwargs', 'key'), monotonic_now - sent_at])
+        .to match(['pending', be_between(0.3, 0.3 + late_tolerance)])
+    end
+
+    it 'publishes new requests immediately' do
+      # given
+      debounce(client, 'pending', 1.0)
+      Process.kill('TERM', server_pid)
+      sleep 0.05
+      sent_at = debounce(client, 'late', 1.0)
+      # when
+      message = read_message(client)
+      # then
+      expect([message&.dig('callback', 'kwargs', 'key'), monotonic_now - sent_at])
+        .to match(['late', be < late_tolerance])
+    end
+
+    it 'exits once no timers are pending' do
+      # given
+      debounce(client, 'pending', 0.2)
+      Process.kill('TERM', server_pid)
+      read_message(client)
+      # when
+      status = exit_status(server_pid, within: 1)
+      # then
+      expect(status&.success?).to be(true)
+    end
+
+    it 'exits at once when no timers are pending' do
+      # when
+      Process.kill('TERM', server_pid)
+      # then
+      expect(exit_status(server_pid, within: 0.5)&.success?).to be(true)
+    end
+  end
+
   it 'removes the socket file when stopped' do
     # when
-    stop_server(server_pid)
+    stop_server(server_pid, signal: 'TERM')
     # then
     expect(File.exist?(socket_path)).to be(false)
   end

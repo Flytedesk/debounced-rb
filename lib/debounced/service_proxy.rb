@@ -85,11 +85,27 @@ module Debounced
       @listening = false
     end
 
+    ###
+    # Block until the server closes the connection (it does when it has drained after SIGTERM), or the timeout passes.
+    # Returns at once when not connected to a server.
+    def wait_for_server(timeout:)
+      deadline = monotonic_now + timeout
+      sleep 0.05 while connected? && monotonic_now < deadline
+    end
+
     def stop
       @abort_signal&.make_true
     end
 
     private
+
+    def connected?
+      listening && @mutex.synchronize { !@socket.nil? }
+    end
+
+    def monotonic_now
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
 
     def close
       @mutex.synchronize do
