@@ -26,12 +26,10 @@ RSpec.describe Debounced::ServiceProxy do
     expect(logger).to have_received(:warn).with(/No connection to DebounceEventServer/)
   end
   it 'can be stopped before it starts listening' do
-    # when
-    stopping = -> { described_class.new.stop }
-    # then
-    expect(stopping).not_to raise_error
+    # when / then
+    expect { described_class.new.stop }.not_to raise_error
   end
-  
+
   it 'lets several proxies listen to the same server' do
     # given
     proxies = Array.new(2) { described_class.new }
@@ -65,7 +63,7 @@ RSpec.describe Debounced::ServiceProxy do
     deadline = Time.now + within
     Array.new(count) { queue.pop(timeout: [deadline - Time.now, 0].max) }.compact
   end
-  
+
   it 'invokes the callback directly when the connection breaks while sending' do
     # given
     allow(TestEvent).to receive(:publish2)
@@ -81,32 +79,32 @@ RSpec.describe Debounced::ServiceProxy do
     proxy.stop
     thread.join(2)
   end
-  
+
   context 'when requests are larger than the socket buffer' do
     let(:invoked) { Queue.new }
     let(:padding) { 'x' * 200_000 }
     let(:proxy) { described_class.new }
     let!(:listener) { proxy.listen.tap { sleep 0.3 } }
-  
+
     before { allow(TestEvent).to receive(:publish2) { |id, _| invoked << id } }
-  
+
     after do
       proxy.stop
       listener.join(2)
     end
-  
+
     def debounce(id)
       callback = Debounced::Callback.new(class_name: 'TestEvent', method_name: 'publish2', args: [id, padding])
       proxy.debounce_activity("key-#{id}", 0.2, callback)
     end
-  
+
     it 'delivers the callback' do
       # when
       debounce(0)
       # then
       expect(invocations(invoked, 1, within: 3)).to eq([0])
     end
-  
+
     it 'delivers every callback when threads send concurrently' do
       # when
       Array.new(10) { |id| Thread.new { debounce(id) } }.each(&:join)

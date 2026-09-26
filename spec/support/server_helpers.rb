@@ -8,18 +8,21 @@ module ServerHelpers
     Timeout.timeout(5) { sleep 0.05 until File.socket?(socket_path) }
     pid
   end
-  
+
   def spawn_server(socket_path)
     log = File.open('debounce_server.log', 'a')
     Process.spawn(RbConfig.ruby, '-Ilib', '-rdebounced', '-rdebounced/server',
                   '-e', 'Debounced::Server.new(ARGV[0]).listen', socket_path,
                   out: log, err: log)
   end
-  
-def socket_inode(socket_path)
-    File.stat(socket_path).ino if File.socket?(socket_path)
-  rescue Errno::ENOENT
-    nil
+
+  def wait_until_accepting(socket_path)
+    Timeout.timeout(5) do
+      UNIXSocket.new(socket_path).close
+    rescue Errno::ENOENT, Errno::ECONNREFUSED
+      sleep 0.05
+      retry
+    end
   end
 
   def exit_status(pid, within:)
@@ -27,7 +30,7 @@ def socket_inode(socket_path)
     until Time.now > deadline
       _, status = Process.wait2(pid, Process::WNOHANG)
       return status if status
-  
+
       sleep 0.05
     end
   end

@@ -115,7 +115,7 @@ RSpec.describe Debounced::Callback do
         # then
         expect($debounced_evaluated).to be_nil
       end
-      
+
       it 'refuses private Kernel methods' do
         # given
         stub_const('Target', Class.new { include Debounced::Callbackable })
@@ -125,7 +125,7 @@ RSpec.describe Debounced::Callback do
         # then
         expect(File.exist?(marker)).to be(false)
       end
-      
+
       it 'allows class methods added by an extended module' do
         # given
         enqueuing = Module.new { def perform_later(id) = id }

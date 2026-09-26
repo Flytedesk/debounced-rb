@@ -94,7 +94,7 @@ module Debounced
     def close
       @mutex.synchronize do
         return unless @socket
-    
+
         logger.debug("Closing connection to #{server_name}")
         @socket.close
         @socket = nil
