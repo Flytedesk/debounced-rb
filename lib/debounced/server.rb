@@ -14,7 +14,7 @@ module Debounced
       remove_socket_file
       Sync do |task|
         @task = task
-        server = UNIXServer.new(@socket_descriptor)
+        server = bind_owner_only
         logger.info("#{self.class.name} listening on #{@socket_descriptor}")
         loop { accept(server.accept) }
       end
@@ -23,6 +23,13 @@ module Debounced
     end
 
     private
+
+def bind_owner_only
+      previous_umask = File.umask(0o177)
+      UNIXServer.new(@socket_descriptor)
+    ensure
+      File.umask(previous_umask)
+    end
 
     def accept(connection)
       if @client

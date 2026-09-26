@@ -59,6 +59,13 @@ RSpec.describe Debounced::Server do
     expect(read_message(client).dig('callback', 'kwargs', 'test_id')).to eq('Zoë')
   end
 
+  it 'creates a socket that only its owner can connect to' do
+    # when
+    mode = File.stat(socket_path).mode & 0o777
+    # then
+    expect(format('%o', mode)).to eq('600')
+  end
+  
   it 'removes the socket file when stopped' do
     # when
     stop_server(server_pid)

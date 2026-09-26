@@ -154,6 +154,7 @@ module Debounced
     def socket
       @mutex.synchronize do
         return @socket if @socket
+        return unless File.owned?(socket_descriptor)
 
         logger_trace { "Connecting to #{server_name} at #{socket_descriptor}" }
         @socket = UNIXSocket.new(socket_descriptor).tap { |s| s.timeout = wait_timeout }
