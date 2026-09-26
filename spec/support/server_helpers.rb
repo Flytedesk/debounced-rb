@@ -42,6 +42,25 @@ module ServerHelpers
     nil
   end
 
+def monotonic_now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+  def debounce(connection, key, timeout, seq: 1)
+    sent_at = monotonic_now
+    write_message(connection, debounce_message(key, timeout:, kwargs: { key:, seq: }))
+    sent_at
+  end
+
+  def collect_callbacks(connection, quiet_for: 0.6)
+    Thread.new do
+      callbacks = []
+      while (message = read_message(connection, timeout: quiet_for))
+        kwargs = message.dig('callback', 'kwargs')
+        callbacks << [kwargs['key'], kwargs['seq'], monotonic_now]
+      end
+      callbacks
+    end
+  end
+
   def write_message(connection, message)
     connection.write(JSON.generate(message), Debounced::ServiceProxy::DELIMITER)
   end
