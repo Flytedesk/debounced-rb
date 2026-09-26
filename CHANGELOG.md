@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - Unreleased
+
+### Changed
+
+- The debounce server is now written in Ruby (`Debounced::Server`, on the `async` gem); Node.js is no longer required
+- Start it with `bundle exec rake debounced:server`, as before
+- Requires Ruby 3.3 or later
+- The server serves any number of connected processes and publishes each callback to the process that sent the latest request for its descriptor
+
+### Fixed
+
+- Callbacks are only dispatched to public methods defined by the application, never to core Ruby methods
+- The socket is created owner-only, and the proxy refuses a socket owned by another user
+- A second server no longer takes over the socket of a running one
+- Callbacks due while their requesting process is disconnected go to another connected process
+- Requests larger than the socket buffer are no longer truncated
+- A failed send falls back to invoking the callback instead of raising
+- Callbacks are no longer delayed by an extra idle timeout in the listener
+- Multi-byte characters split across socket reads are no longer corrupted
+- `ServiceProxy#stop` works before `listen`
+
 ## [1.0.7](https://github.com/Flytedesk/debounced/compare/v1.0.6...v1.0.7) (2026-04-15)
 
 

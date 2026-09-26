@@ -96,6 +96,10 @@ proxy.debounce_activity("my-event-123", 5, event.debounce_callback)
 3. Each new request for the same descriptor cancels its timer and starts a new one, keeping the latest callback
 4. When a timer expires, the server sends the callback back to the proxy, which invokes it
 
+Several processes can connect to one server, for example every Puma worker of an application. Each callback goes
+back to the process that sent the latest request for its descriptor, or to another connected process if that one
+has gone away. When no server is reachable, the proxy invokes callbacks immediately.
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).

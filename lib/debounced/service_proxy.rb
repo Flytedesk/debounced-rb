@@ -49,7 +49,7 @@ module Debounced
         end
       end
     rescue IOError, SystemCallError, NoServerError => e
-      logger.warn("Unable to send #{activity_descriptor} to #{server_name} (#{e.message}); skipping debounce step.")
+      logger.warn("Unable to send #{activity_descriptor} (#{e.message}); skipping debounce step.")
       close
       callback.call
     end
