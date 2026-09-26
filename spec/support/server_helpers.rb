@@ -16,6 +16,12 @@ module ServerHelpers
                   out: log, err: log)
   end
   
+def socket_inode(socket_path)
+    File.stat(socket_path).ino if File.socket?(socket_path)
+  rescue Errno::ENOENT
+    nil
+  end
+
   def exit_status(pid, within:)
     deadline = Time.now + within
     until Time.now > deadline

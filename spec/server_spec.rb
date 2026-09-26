@@ -69,7 +69,10 @@ RSpec.describe Debounced::Server do
   context 'when a stale socket file is left behind' do
     let!(:server_pid) do
       UNIXServer.new(socket_path).close
-      start_server(socket_path)
+      stale_inode = File.stat(socket_path).ino
+      spawn_server(socket_path).tap do
+        Timeout.timeout(5) { sleep 0.05 while [nil, stale_inode].include?(socket_inode(socket_path)) }
+      end
     end
   
     it 'replaces it and serves requests' do
