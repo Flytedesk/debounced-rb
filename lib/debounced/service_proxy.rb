@@ -86,7 +86,7 @@ module Debounced
     end
 
     def stop
-      @abort_signal.make_true
+      @abort_signal&.make_true
     end
 
     private
