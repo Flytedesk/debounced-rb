@@ -19,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Callbacks are only dispatched to public methods defined by the application, never to core Ruby methods
 - The socket is created owner-only, and the proxy refuses a socket owned by another user
 - A second server no longer takes over the socket of a running one
-- Callbacks due while their requesting process is disconnected go to another connected process
 - Requests larger than the socket buffer are no longer truncated
 - A failed send falls back to invoking the callback instead of raising
 - Callbacks are no longer delayed by an extra idle timeout in the listener

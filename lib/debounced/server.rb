@@ -72,12 +72,11 @@ module Debounced
     end
 
     def publish(descriptor, callback, connection)
-      recipient = @clients.include?(connection) ? connection : @clients.first
-      if recipient
+      if @clients.include?(connection)
         logger.debug { "Debounce period expired for #{descriptor}" }
-        send_message(recipient, type: 'publishEvent', callback:)
+        send_message(connection, type: 'publishEvent', callback:)
       else
-        logger.warn("No client connected; dropping #{descriptor}")
+        logger.warn("Client disconnected; dropping #{descriptor}")
       end
     end
 
