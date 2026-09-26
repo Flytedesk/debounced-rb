@@ -4,12 +4,26 @@ require 'timeout'
 
 module ServerHelpers
   def start_server(socket_path)
-    log = File.open('debounce_server.log', 'a')
-    pid = Process.spawn(RbConfig.ruby, '-Ilib', '-rdebounced', '-rdebounced/server',
-                        '-e', 'Debounced::Server.new(ARGV[0]).listen', socket_path,
-                        out: log, err: log)
+    pid = spawn_server(socket_path)
     Timeout.timeout(5) { sleep 0.05 until File.socket?(socket_path) }
     pid
+  end
+  
+  def spawn_server(socket_path)
+    log = File.open('debounce_server.log', 'a')
+    Process.spawn(RbConfig.ruby, '-Ilib', '-rdebounced', '-rdebounced/server',
+                  '-e', 'Debounced::Server.new(ARGV[0]).listen', socket_path,
+                  out: log, err: log)
+  end
+  
+  def exit_status(pid, within:)
+    deadline = Time.now + within
+    until Time.now > deadline
+      _, status = Process.wait2(pid, Process::WNOHANG)
+      return status if status
+  
+      sleep 0.05
+    end
   end
 
   def stop_server(pid)

@@ -11,15 +11,15 @@ module Debounced
     end
 
     def listen
-      remove_socket_file
+      remove_stale_socket_file
       Sync do |task|
         @task = task
         server = bind_owner_only
         logger.info("#{self.class.name} listening on #{@socket_descriptor}")
         loop { accept(server.accept) }
+      ensure
+        File.delete(@socket_descriptor) if server
       end
-    ensure
-      remove_socket_file
     end
 
     private
@@ -99,8 +99,13 @@ def bind_owner_only
       connection.write(JSON.generate(message), ServiceProxy::DELIMITER)
     end
 
-    def remove_socket_file
-      File.delete(@socket_descriptor) if File.exist?(@socket_descriptor)
+    def remove_stale_socket_file
+      return unless File.exist?(@socket_descriptor)
+    
+      UNIXSocket.new(@socket_descriptor).close
+      raise SocketConflictError, "Another server is listening on #{@socket_descriptor}"
+    rescue Errno::ECONNREFUSED
+      File.delete(@socket_descriptor)
     end
 
     def logger
