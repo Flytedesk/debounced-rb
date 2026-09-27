@@ -100,6 +100,21 @@ Several processes can connect to one server, for example every Puma worker of an
 back to the process that sent the latest request for its descriptor, and is dropped if that process has gone away.
 When no server is reachable, the proxy invokes callbacks immediately.
 
+## Performance
+
+Measured with `bin/benchmark`, which drives a server process over its socket. Medians of three runs on an Apple M4 Max,
+Ruby 4.0.4, compared with the Node.js server from `debounced` 2.1.0 on Node.js 24.18.
+
+| Measure | Ruby server (3.0) | Node.js server (2.1) |
+|---|---|---|
+| Throughput: 100,000 requests across 10,000 descriptors | 224,000 requests/s | 263,000 requests/s |
+| Callback lateness after its timeout, median | 0.25 ms | 0.26 ms |
+| Callback lateness, 99th percentile | 1.96 ms | 1.95 ms |
+| Memory, idle | 27 MB | 48 MB |
+| Memory, 100,000 pending timers | 156 MB | 174 MB |
+
+To measure another server, pass its command: `bin/benchmark node path/to/server.mjs`.
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).

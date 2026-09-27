@@ -3,6 +3,7 @@ PATH
   specs:
     debounced (2.0.0)
       async (~> 2.46)
+      io-event (~> 1.21)
       json (>= 2.19, < 4.0)
       logger
       semantic_logger (>= 4.17, < 6.0)

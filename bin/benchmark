@@ -1,0 +1,83 @@
+#!/usr/bin/env ruby
+# Usage: bin/benchmark [server command]
+# Benchmarks a debounce server over its socket. Defaults to the Ruby server;
+# pass another command (e.g. "node path/to/server.mjs") to compare. The socket path is appended.
+require 'json'
+require 'rbconfig'
+require 'shellwords'
+require 'socket'
+require 'timeout'
+
+DELIMITER = "\f".freeze
+SOCKET = "/tmp/debounced-benchmark-#{Process.pid}.sock".freeze
+SERVER = ARGV.any? ? Shellwords.split(ARGV.join(' ')) : [RbConfig.ruby, '-Ilib', '-rdebounced', '-rdebounced/server',
+                                                            '-e', 'Debounced::Server.new(ARGV[0]).listen']
+
+def now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+def request(key, timeout)
+  callback = { class_name: 'BenchmarkEvent', method_name: 'publish', kwargs: { key: } }
+  "#{JSON.generate(type: 'debounceEvent', data: { descriptor: key, timeout:, callback: })}#{DELIMITER}"
+end
+
+def with_server
+  pid = Process.spawn(*SERVER, SOCKET, out: File::NULL, err: File::NULL)
+  Timeout.timeout(10) { sleep 0.05 until File.socket?(SOCKET) }
+  yield pid
+ensure
+  Process.kill('TERM', pid)
+  Process.wait(pid)
+end
+
+def rss_mb(pid) = `ps -o rss= -p #{pid}`.to_i / 1024.0
+
+def collect_publishes(connection, count)
+  Array.new(count) do
+    key = JSON.parse(connection.gets(DELIMITER, chomp: true)).dig('callback', 'kwargs', 'key')
+    [key, now]
+  end
+end
+
+def throughput(keys: 10_000, bounces: 10, timeout: 1.0)
+  with_server do
+    connection = UNIXSocket.new(SOCKET)
+    started = now
+    bounces.times { keys.times { |k| connection.write(request("key-#{k}", timeout)) } }
+    sent = now
+    publishes = collect_publishes(connection, keys)
+    processing = publishes.map(&:last).max - started - timeout
+    { requests: keys * bounces, send_seconds: sent - started, requests_per_second: (keys * bounces / processing).round,
+      callbacks: publishes.size }
+  end
+end
+
+def lateness(keys: 1_000, timeout: 0.2)
+  with_server do
+    connection = UNIXSocket.new(SOCKET)
+    reader = Thread.new { collect_publishes(connection, keys) }
+    sent_at = {}
+    keys.times do |k|
+      sent_at["key-#{k}"] = now
+      connection.write(request("key-#{k}", timeout))
+      sleep 0.001
+    end
+    late_ms = reader.value.map { |key, at| (at - sent_at.fetch(key) - timeout) * 1000 }.sort
+    { p50_ms: late_ms[late_ms.size / 2].round(2), p99_ms: late_ms[(late_ms.size * 0.99).floor].round(2),
+      max_ms: late_ms.last.round(2) }
+  end
+end
+
+def memory(keys: 100_000, timeout: 60)
+  with_server do |pid|
+    idle = rss_mb(pid)
+    connection = UNIXSocket.new(SOCKET)
+    keys.times { |k| connection.write(request("key-#{k}", timeout)) }
+    sleep 2
+    { idle_mb: idle.round(1), with_pending_timers_mb: rss_mb(pid).round(1), pending_timers: keys }
+  end
+end
+
+puts "server: #{SERVER.join(' ')}"
+puts "throughput: #{throughput}"
+puts "lateness:   #{lateness}"
+puts "memory:     #{memory}"

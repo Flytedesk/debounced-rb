@@ -1,4 +1,6 @@
 require 'async'
+require 'async/notification'
+require 'io/event'
 require 'json'
 require 'set'
 require 'socket'
@@ -8,6 +10,8 @@ module Debounced
     def initialize(socket_descriptor)
       @socket_descriptor = socket_descriptor
       @timers = {}
+      @queue = IO::Event::Timers.new
+      @timer_scheduled = Async::Notification.new
       @clients = Set.new
     end
 
@@ -17,6 +21,7 @@ module Debounced
         @task = task
         server = bind_owner_only
         logger.info("#{self.class.name} listening on #{@socket_descriptor}")
+        task.async { run_timers }
         loop do
           connection = server.accept
           task.async { serve(connection) }
@@ -62,13 +67,31 @@ module Debounced
 
     def debounce(data, connection)
       descriptor = data['descriptor']
-      @timers.delete(descriptor)&.stop
+      @timers.delete(descriptor)&.cancel!
       logger.debug { "Debouncing #{descriptor}" }
-      @timers[descriptor] = @task.async do
-        sleep data['timeout']
+      @timers[descriptor] = @queue.after(data['timeout']) do
         @timers.delete(descriptor)
         publish(descriptor, data['callback'], connection)
       end
+      @timer_scheduled.signal
+    end
+
+    def run_timers
+      loop do
+        wait_for_next_deadline
+        @queue.fire
+      end
+    end
+
+    def wait_for_next_deadline
+      interval = @queue.wait_interval
+      if interval.nil?
+        @timer_scheduled.wait
+      elsif interval.positive?
+        Async::Task.current.with_timeout(interval) { @timer_scheduled.wait }
+      end
+    rescue Async::TimeoutError
+      nil
     end
 
     def publish(descriptor, callback, connection)
@@ -78,10 +101,12 @@ module Debounced
       else
         logger.warn("Client disconnected; dropping #{descriptor}")
       end
+    rescue IOError, SystemCallError => e
+      logger.warn("Unable to publish #{descriptor}: #{e.message}")
     end
 
     def reset
-      @timers.each_value(&:stop)
+      @timers.each_value(&:cancel!)
       @timers.clear
     end
 

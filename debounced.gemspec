@@ -21,6 +21,7 @@ Gem::Specification.new do |gem|
 
   # # Dependencies
   gem.add_dependency "async", "~> 2.46"
+  gem.add_dependency "io-event", "~> 1.21"
   gem.add_dependency "json", ">= 2.19", "< 4.0"
   gem.add_dependency "semantic_logger", ">= 4.17", "< 6.0"
   gem.add_dependency 'logger'

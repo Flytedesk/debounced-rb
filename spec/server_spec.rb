@@ -66,6 +66,57 @@ RSpec.describe Debounced::Server do
 
   end
 
+  context 'with timers of different lengths' do
+    let(:late_tolerance) { 0.05 }
+
+    it 'fires a shorter timer scheduled after a longer one at its own deadline' do
+      # given
+      debounce(client, 'long', 1.0)
+      sent_at = debounce(client, 'short', 0.1)
+      # when
+      message = read_message(client)
+      # then
+      expect([message&.dig('callback', 'kwargs', 'key'), monotonic_now - sent_at])
+        .to match(['short', be_between(0.1, 0.1 + late_tolerance)])
+    end
+
+    it 'never publishes a callback before its timeout' do
+      # given
+      timeouts = { 'a' => 0.3, 'b' => 0.05, 'c' => 0.2, 'd' => 0.1, 'e' => 0.15 }
+      sent_at = timeouts.to_h { |key, timeout| [key, debounce(client, key, timeout)] }
+      # when
+      callbacks = collect_callbacks(client).value
+      # then
+      expect(callbacks.map { |key, _, at| at - sent_at.fetch(key) - timeouts.fetch(key) }.min).to be >= 0
+    end
+
+    it 'delivers each descriptor once to its latest requester with its latest payload' do
+      # given
+      clients = Array.new(3) { UNIXSocket.new(socket_path) }
+      collectors = clients.map { |connection| collect_callbacks(connection) }
+      expected = {}
+      clients.each_with_index do |connection, c|
+        6.times do |k|
+          key = "client-#{c}-key-#{k}"
+          debounce(connection, key, 0.05 * (1 + ((c + k) % 6)))
+          debounce(connection, key, 0.05 * (6 - ((c + k) % 6)), seq: 2) if k.even?
+          expected[key] = [c, k.even? ? 2 : 1]
+        end
+      end
+      clients.each_with_index do |connection, c|
+        debounce(connection, 'shared', 0.1 * (3 - c), seq: c)
+        sleep 0.02
+      end
+      expected['shared'] = [2, 2]
+      # when
+      received = collectors.each_with_index.flat_map { |collector, c| collector.value.map { |key, seq, _| [key, [c, seq]] } }
+      # then
+      expect(received.sort).to eq(expected.sort)
+    ensure
+      clients&.each(&:close)
+    end
+  end
+
   it 'discards pending callbacks on reset' do
     # given
     write_message(client, debounce_message('key'))
