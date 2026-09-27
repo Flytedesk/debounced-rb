@@ -5,7 +5,4 @@ set -vx
 
 bundle install
 
-# Install node dependencies
-npm install
-
 # Do any other automated setup steps

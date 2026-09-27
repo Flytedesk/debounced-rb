@@ -22,8 +22,7 @@ A clear and concise description of what you expected to happen.
 
 **Environment:**
  - OS: [e.g. Ubuntu 20.04]
- - Ruby version [e.g. 3.1.0]
- - Node.js version [e.g. 16.13.0]
+ - Ruby version [e.g. 4.0.4]
  - Gem Version [e.g. 0.1.0]
 
 **Additional context**

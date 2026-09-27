@@ -8,7 +8,7 @@ Gem::Specification.new do |gem|
 
   gem.summary = "Efficient event debouncing in Ruby"
   gem.description = "Debounce Ruby callbacks across processes through a lightweight Ruby timer server"
-  gem.homepage = "https://github.com/flytedesk/debounced"
+  gem.homepage = "https://github.com/Flytedesk/debounced-rb"
   gem.license = "MIT"
   gem.required_ruby_version = ">= 3.3.0"
 
@@ -22,8 +22,8 @@ Gem::Specification.new do |gem|
   # # Dependencies
   gem.add_dependency "async", "~> 2.46"
   gem.add_dependency "io-event", "~> 1.21"
-  gem.add_dependency "json", "~> 2.19"
-  gem.add_dependency "semantic_logger", "~> 4.17"
+  gem.add_dependency "json", ">= 2.19", "< 4.0"
+  gem.add_dependency "semantic_logger", ">= 4.17", "< 6.0"
   gem.add_dependency 'logger'
 
   # Development dependencies
