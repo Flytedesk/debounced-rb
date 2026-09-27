@@ -1,4 +1,5 @@
 require 'async'
+require 'async/barrier'
 require 'async/notification'
 require 'async/queue'
 require 'io/event'
@@ -9,7 +10,8 @@ module Debounced
   class Server
     def initialize(socket_descriptor)
       @socket_descriptor = socket_descriptor
-      @timers = Hash.new { |all, outbox| all[outbox] = {} }
+      @timers = {}
+      @writers = Async::Barrier.new
       @queue = IO::Event::Timers.new
       @timer_scheduled = Async::Notification.new
     end
@@ -17,9 +19,11 @@ module Debounced
     def listen
       remove_stale_socket_file
       Sync do |task|
+        @root = task
         server = bind_owner_only
         logger.info("#{self.class.name} listening on #{@socket_descriptor}")
         task.async { run_timers }
+        task.async { drain_on_sigterm }
         loop do
           connection = server.accept
           task.async { serve(connection) }
@@ -41,7 +45,8 @@ module Debounced
     def serve(connection)
       logger.info('Client connected')
       outbox = Async::Queue.new
-      Async { write_messages(connection, outbox) }
+      @timers[outbox] = {}
+      @writers.async { write_messages(connection, outbox) }
       while (line = connection.gets(ServiceProxy::DELIMITER, chomp: true))
         handle(line, outbox)
       end
@@ -52,6 +57,7 @@ module Debounced
       @timers.delete(outbox)&.each_value(&:cancel!)
       outbox.close
       connection.close
+      stop_if_drained
     end
 
     def write_messages(connection, outbox)
@@ -73,14 +79,40 @@ module Debounced
 
     def debounce(data, outbox)
       descriptor = data['descriptor']
-      timers = @timers[outbox]
+      timers = @timers.fetch(outbox)
       timers.delete(descriptor)&.cancel!
+      if @draining
+        publish(descriptor, data['callback'], outbox)
+        return stop_if_drained
+      end
+
       logger.debug { "Debouncing #{descriptor}" }
       timers[descriptor] = @queue.after(data['timeout']) do
         timers.delete(descriptor)
         publish(descriptor, data['callback'], outbox)
+        stop_if_drained
       end
       @timer_scheduled.signal
+    end
+
+    def drain_on_sigterm
+      signals, signal_writer = IO.pipe
+      Signal.trap('TERM') { signal_writer.write_nonblock('.', exception: false) }
+      signals.read(1)
+      logger.info('Received SIGTERM; firing pending timers, then exiting')
+      @draining = true
+      stop_if_drained
+    end
+
+    def stop_if_drained
+      finish_draining if @draining && @timers.each_value.all?(&:empty?)
+    end
+
+    def finish_draining
+      @draining = false
+      @timers.each_key(&:close)
+      @writers.wait
+      @root.stop
     end
 
     def run_timers

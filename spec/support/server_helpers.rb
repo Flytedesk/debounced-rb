@@ -35,8 +35,8 @@ module ServerHelpers
     end
   end
 
-  def stop_server(pid)
-    Process.kill('TERM', pid)
+  def stop_server(pid, signal: 'INT')
+    Process.kill(signal, pid)
     Process.wait(pid)
   rescue Errno::ESRCH, Errno::ECHILD
     nil

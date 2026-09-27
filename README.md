@@ -89,6 +89,22 @@ proxy.debounce_activity("my-event-123", 5, event.debounce_callback)
 # > Publishing event: #<MyEvent:0x00007f9b1b8b3b40 @test_id="Hello World">
 ```
 
+### Shutting down
+
+On SIGTERM the server stops debouncing: pending timers still fire on schedule, requests that arrive afterwards are
+published immediately, and once nothing is pending the server closes its connections and exits. Keep debounce
+timeouts shorter than your platform's shutdown grace period (30 seconds on Heroku).
+
+So that a process receives the callbacks still pending when it shuts down, stop the proxy with a timeout before
+exiting:
+
+```ruby
+at_exit { proxy.stop(timeout: 10) }
+```
+
+It waits until the server closes the connection or the timeout passes, and returns at once when not connected.
+SIGINT stops the server immediately, which is convenient in development.
+
 ## How It Works
 
 1. The debounce server listens on a Unix socket and runs one lightweight timer per activity descriptor
