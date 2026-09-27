@@ -95,13 +95,14 @@ On SIGTERM the server stops debouncing: pending timers still fire on schedule, r
 published immediately, and once nothing is pending the server closes its connections and exits. Keep debounce
 timeouts shorter than your platform's shutdown grace period (30 seconds on Heroku).
 
-So that a process receives the callbacks still pending when it shuts down, wait for the server before exiting:
+So that a process receives the callbacks still pending when it shuts down, stop the proxy with a timeout before
+exiting:
 
 ```ruby
-at_exit { proxy.wait_for_server(timeout: 10) }
+at_exit { proxy.stop(timeout: 10) }
 ```
 
-`wait_for_server` returns as soon as the server closes the connection, or at once when the proxy is not connected.
+It waits until the server closes the connection or the timeout passes, and returns at once when not connected.
 SIGINT stops the server immediately, which is convenient in development.
 
 ## How It Works

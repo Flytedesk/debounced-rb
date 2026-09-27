@@ -112,13 +112,13 @@ RSpec.describe Debounced::ServiceProxy do
       expect(invocations(invoked, 10, within: 5).sort).to eq((0...10).to_a)
     end
   end
-  describe '#wait_for_server' do
+  describe '#stop with a timeout' do
     it 'returns at once when not connected to a server' do
       # given
       stop_server(server_pid)
       started = monotonic_now
       # when
-      described_class.new.wait_for_server(timeout: 5)
+      described_class.new.stop(timeout: 5)
       # then
       expect(monotonic_now - started).to be < 0.1
     end
@@ -132,7 +132,7 @@ RSpec.describe Debounced::ServiceProxy do
       Process.kill('TERM', server_pid)
       started = monotonic_now
       # when
-      proxy.wait_for_server(timeout: 5)
+      proxy.stop(timeout: 5)
       # then
       expect(monotonic_now - started).to be_between(0.4, 1.0)
     ensure
@@ -147,7 +147,7 @@ RSpec.describe Debounced::ServiceProxy do
       sleep 0.3
       started = monotonic_now
       # when
-      proxy.wait_for_server(timeout: 0.3)
+      proxy.stop(timeout: 0.3)
       # then
       expect(monotonic_now - started).to be_between(0.3, 0.5)
     ensure

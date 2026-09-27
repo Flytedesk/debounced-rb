@@ -86,14 +86,11 @@ module Debounced
     end
 
     ###
-    # Block until the server closes the connection (it does when it has drained after SIGTERM), or the timeout passes.
-    # Returns at once when not connected to a server.
-    def wait_for_server(timeout:)
+    # Stop listening. With a timeout, first wait up to that many seconds for the server to close the connection, which it
+    # does once it has drained after SIGTERM, so the callbacks still pending arrive before the process exits.
+    def stop(timeout: 0)
       deadline = monotonic_now + timeout
       sleep 0.05 while connected? && monotonic_now < deadline
-    end
-
-    def stop
       @abort_signal&.make_true
     end
 
