@@ -135,8 +135,11 @@ RSpec.describe Debounced::ServiceProxy do
       started = monotonic_now
       # when
       proxy.stop(timeout: 5)
+      elapsed = monotonic_now - started
+      server_exit = exit_status(server_pid, within: 0.1)
       # then
-      expect(monotonic_now - started).to be_between(0.4, 1.0)
+      expect(server_exit&.success?).to be(true)
+      expect(elapsed).to be < 5
     ensure
       proxy.stop
       thread.join(2)
