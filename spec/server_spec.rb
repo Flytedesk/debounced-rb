@@ -43,14 +43,14 @@ RSpec.describe Debounced::Server do
 
     after { other_client.close }
 
-    it 'publishes to the client that sent the latest request for the descriptor' do
+    it 'keeps callbacks for the same descriptor separate for each client' do
       # given
       write_message(client, debounce_message('key', kwargs: { test_id: 'first' }))
-      write_message(other_client, debounce_message('key', kwargs: { test_id: 'latest' }))
+      write_message(other_client, debounce_message('key', kwargs: { test_id: 'other' }))
       # when
-      message = read_message(other_client)
+      messages = [read_message(client), read_message(other_client)]
       # then
-      expect(message&.dig('callback', 'kwargs', 'test_id')).to eq('latest')
+      expect(messages.map { _1&.dig('callback', 'kwargs', 'test_id') }).to eq(%w[first other])
     end
 
     it 'drops the callback when the requesting client has disconnected' do
@@ -64,6 +64,14 @@ RSpec.describe Debounced::Server do
       expect(message).to be_nil
     end
 
+    it "discards every client's pending callbacks on reset" do
+      # given
+      write_message(other_client, debounce_message('key'))
+      # when
+      write_message(client, type: 'reset')
+      # then
+      expect(read_message(other_client, timeout: 0.3)).to be_nil
+    end
   end
 
   context 'with timers of different lengths' do
@@ -80,6 +88,21 @@ RSpec.describe Debounced::Server do
         .to match(['short', be_between(0.1, 0.1 + late_tolerance)])
     end
 
+    it "keeps firing other clients' timers while one client stops reading" do
+      # given
+      stuck = UNIXSocket.new(socket_path)
+      20.times { |i| write_message(stuck, debounce_message("stuck-#{i}", timeout: 0.05, kwargs: { test_id: 'x' * 100_000 })) }
+      sleep 0.3
+      sent_at = debounce(client, 'healthy', 0.1)
+      # when
+      message = read_message(client)
+      # then
+      expect([message&.dig('callback', 'kwargs', 'key'), monotonic_now - sent_at])
+        .to match(['healthy', be_between(0.1, 0.1 + late_tolerance)])
+    ensure
+      stuck&.close
+    end
+
     it 'never publishes a callback before its timeout' do
       # given
       timeouts = { 'a' => 0.3, 'b' => 0.05, 'c' => 0.2, 'd' => 0.1, 'e' => 0.15 }
@@ -90,7 +113,7 @@ RSpec.describe Debounced::Server do
       expect(callbacks.map { |key, _, at| at - sent_at.fetch(key) - timeouts.fetch(key) }.min).to be >= 0
     end
 
-    it 'delivers each descriptor once to its latest requester with its latest payload' do
+    it "delivers each client's descriptors to that client once with its latest payload" do
       # given
       clients = Array.new(3) { UNIXSocket.new(socket_path) }
       collectors = clients.map { |connection| collect_callbacks(connection) }
@@ -103,12 +126,9 @@ RSpec.describe Debounced::Server do
           expected[key] = [c, k.even? ? 2 : 1]
         end
       end
-      clients.each_with_index do |connection, c|
-        debounce(connection, 'shared', 0.1 * (3 - c), seq: c)
-        sleep 0.02
-      end
-      expected['shared'] = [2, 2]
+      clients.each_with_index { |connection, c| debounce(connection, 'shared', 0.1 * (3 - c), seq: c) }
       # when
+      expected = expected.to_a + Array.new(clients.size) { |c| ['shared', [c, c]] }
       received = collectors.each_with_index.flat_map { |collector, c| collector.value.map { |key, seq, _| [key, [c, seq]] } }
       # then
       expect(received.sort).to eq(expected.sort)

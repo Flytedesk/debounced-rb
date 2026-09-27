@@ -96,8 +96,9 @@ proxy.debounce_activity("my-event-123", 5, event.debounce_callback)
 3. Each new request for the same descriptor cancels its timer and starts a new one, keeping the latest callback
 4. When a timer expires, the server sends the callback back to the proxy, which invokes it
 
-Several processes can connect to one server, for example every Puma worker of an application. Each callback goes
-back to the process that sent the latest request for its descriptor, and is dropped if that process has gone away.
+Several processes can connect to one server, for example every Puma worker of an application. Each process's
+descriptors are debounced separately, even when two processes use the same descriptor: each gets its own callback,
+and a process's pending callbacks are dropped when it disconnects.
 When no server is reachable, the proxy invokes callbacks immediately.
 
 ## Performance

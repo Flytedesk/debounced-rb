@@ -1,24 +1,22 @@
 require 'async'
 require 'async/notification'
+require 'async/queue'
 require 'io/event'
 require 'json'
-require 'set'
 require 'socket'
 
 module Debounced
   class Server
     def initialize(socket_descriptor)
       @socket_descriptor = socket_descriptor
-      @timers = {}
+      @timers = Hash.new { |all, outbox| all[outbox] = {} }
       @queue = IO::Event::Timers.new
       @timer_scheduled = Async::Notification.new
-      @clients = Set.new
     end
 
     def listen
       remove_stale_socket_file
       Sync do |task|
-        @task = task
         server = bind_owner_only
         logger.info("#{self.class.name} listening on #{@socket_descriptor}")
         task.async { run_timers }
@@ -42,22 +40,30 @@ module Debounced
 
     def serve(connection)
       logger.info('Client connected')
-      @clients << connection
+      outbox = Async::Queue.new
+      Async { write_messages(connection, outbox) }
       while (line = connection.gets(ServiceProxy::DELIMITER, chomp: true))
-        handle(line, connection)
+        handle(line, outbox)
       end
     rescue IOError, SystemCallError => e
       logger.warn("Client connection error: #{e.message}")
     ensure
       logger.info('Client disconnected')
-      @clients.delete(connection)
+      @timers.delete(outbox)&.each_value(&:cancel!)
+      outbox.close
       connection.close
     end
 
-    def handle(line, connection)
+    def write_messages(connection, outbox)
+      outbox.each { |message| send_message(connection, message) }
+    rescue IOError, SystemCallError => e
+      logger.warn("Unable to write to client: #{e.message}")
+    end
+
+    def handle(line, outbox)
       message = JSON.parse(line)
       case message['type']
-      when 'debounceEvent' then debounce(message['data'], connection)
+      when 'debounceEvent' then debounce(message['data'], outbox)
       when 'reset' then reset
       else logger.warn("Unknown message: #{line}")
       end
@@ -65,13 +71,14 @@ module Debounced
       logger.warn("Unable to parse message: #{e.message}")
     end
 
-    def debounce(data, connection)
+    def debounce(data, outbox)
       descriptor = data['descriptor']
-      @timers.delete(descriptor)&.cancel!
+      timers = @timers[outbox]
+      timers.delete(descriptor)&.cancel!
       logger.debug { "Debouncing #{descriptor}" }
-      @timers[descriptor] = @queue.after(data['timeout']) do
-        @timers.delete(descriptor)
-        publish(descriptor, data['callback'], connection)
+      timers[descriptor] = @queue.after(data['timeout']) do
+        timers.delete(descriptor)
+        publish(descriptor, data['callback'], outbox)
       end
       @timer_scheduled.signal
     end
@@ -94,20 +101,13 @@ module Debounced
       nil
     end
 
-    def publish(descriptor, callback, connection)
-      if @clients.include?(connection)
-        logger.debug { "Debounce period expired for #{descriptor}" }
-        send_message(connection, type: 'publishEvent', callback:)
-      else
-        logger.warn("Client disconnected; dropping #{descriptor}")
-      end
-    rescue IOError, SystemCallError => e
-      logger.warn("Unable to publish #{descriptor}: #{e.message}")
+    def publish(descriptor, callback, outbox)
+      logger.debug { "Debounce period expired for #{descriptor}" }
+      outbox.push(type: 'publishEvent', callback:)
     end
 
     def reset
-      @timers.each_value(&:cancel!)
-      @timers.clear
+      @timers.each_value { |timers| timers.each_value(&:cancel!).clear }
     end
 
     def send_message(connection, message)
