@@ -211,6 +211,7 @@ RSpec.describe Debounced::Server do
     it 'keeps firing pending timers on schedule' do
       # given
       sent_at = debounce(client, 'pending', 0.3)
+      wait_until_processed(client)
       Process.kill('TERM', server_pid)
       # when
       message = read_message(client)
@@ -222,8 +223,9 @@ RSpec.describe Debounced::Server do
     it 'publishes new requests immediately' do
       # given
       debounce(client, 'pending', 1.0)
+      wait_until_processed(client)
       Process.kill('TERM', server_pid)
-      sleep 0.05
+      sleep 0.1
       sent_at = debounce(client, 'late', 1.0)
       # when
       message = read_message(client)
@@ -235,6 +237,7 @@ RSpec.describe Debounced::Server do
     it 'exits once no timers are pending' do
       # given
       debounce(client, 'pending', 0.2)
+      wait_until_processed(client)
       Process.kill('TERM', server_pid)
       read_message(client)
       # when

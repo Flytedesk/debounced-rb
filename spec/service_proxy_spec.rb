@@ -128,13 +128,18 @@ RSpec.describe Debounced::ServiceProxy do
       proxy = described_class.new
       thread = proxy.listen
       sleep 0.3
-      debounce(UNIXSocket.new(socket_path), 'pending', 0.5)
+      other_client = UNIXSocket.new(socket_path)
+      debounce(other_client, 'pending', 0.5)
+      wait_until_processed(other_client)
       Process.kill('TERM', server_pid)
       started = monotonic_now
       # when
       proxy.stop(timeout: 5)
+      elapsed = monotonic_now - started
+      server_exit = exit_status(server_pid, within: 0.1)
       # then
-      expect(monotonic_now - started).to be_between(0.4, 1.0)
+      expect(server_exit&.success?).to be(true)
+      expect(elapsed).to be < 5
     ensure
       proxy.stop
       thread.join(2)

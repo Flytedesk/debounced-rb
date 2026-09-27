@@ -50,6 +50,11 @@ module ServerHelpers
     sent_at
   end
 
+  def wait_until_processed(connection)
+    debounce(connection, 'processed', 0)
+    Timeout.timeout(2) { nil until read_message(connection)&.dig('callback', 'kwargs', 'key') == 'processed' }
+  end
+
   def collect_callbacks(connection, quiet_for: 0.6)
     Thread.new do
       callbacks = []
