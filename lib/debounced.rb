@@ -21,7 +21,10 @@ module Debounced
   end
 
   class Configuration
-    attr_accessor :socket_descriptor, :wait_timeout, :enable_trace_logging
+    # @!attribute error_handler
+    #   Optional callable invoked when a callback raises. Receives the error and the Debounced::Callback.
+    #   Lets a host app report callback failures (e.g. to an error tracker) without the gem depending on one.
+    attr_accessor :socket_descriptor, :wait_timeout, :enable_trace_logging, :error_handler
 
     def initialize
       @socket_descriptor = ENV['DEBOUNCED_SOCKET'] || '/tmp/app.debounceEvents'

@@ -78,6 +78,7 @@ module Debounced
     rescue StandardError => e
       Debounced.configuration.logger.warn("Unable to invoke callback #{as_json}: #{e.message}")
       Debounced.configuration.logger.warn(e.backtrace.join("\n"))
+      Debounced.configuration.error_handler&.call(e, self)
     end
 
     private

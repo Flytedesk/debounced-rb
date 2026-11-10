@@ -106,6 +106,36 @@ RSpec.describe Debounced::Callback do
       end
     end
 
+    context 'when the callback raises' do
+      it 'invokes the configured error_handler with the error and the callback' do
+        # given
+        stub_const('Boom', Class.new do
+          include Debounced::Callbackable
+          def self.go = raise('kaboom')
+        end)
+        callback = described_class.new(class_name: 'Boom', method_name: 'go')
+        handled_error = nil
+        handled_source = nil
+        allow(Debounced.configuration).to receive(:error_handler)
+          .and_return(->(error, source) { handled_error = error; handled_source = source })
+        # when
+        callback.call
+        # then
+        expect(handled_error).to be_a(RuntimeError).and(have_attributes(message: 'kaboom'))
+        expect(handled_source).to be(callback)
+      end
+
+      it 'swallows the error (never raises into the caller) when no error_handler is configured' do
+        # given
+        stub_const('Boom', Class.new do
+          include Debounced::Callbackable
+          def self.go = raise('kaboom')
+        end)
+        # when / then
+        expect { described_class.new(class_name: 'Boom', method_name: 'go').call }.not_to raise_error
+      end
+    end
+
     context 'methods that are not part of the target class API' do
       it 'refuses public reflection methods from core Ruby' do
         # given
