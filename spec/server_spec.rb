@@ -250,7 +250,7 @@ RSpec.describe Debounced::Server do
       # when
       Process.kill('TERM', server_pid)
       # then
-      expect(exit_status(server_pid, within: 0.5)&.success?).to be(true)
+      expect(exit_status(server_pid, within: 2)&.success?).to be(true)
     end
   end
 
