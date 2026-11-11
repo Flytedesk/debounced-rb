@@ -22,8 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The gem now depends on and requires `concurrent-ruby` directly, rather than relying on the host app to have loaded it
-  (`ServiceProxy` uses `Concurrent::AtomicBoolean`)
+- The gem now depends on and requires `concurrent-ruby` directly, rather than relying on `semantic_logger` to pull it in
+  transitively (`ServiceProxy` uses `Concurrent::AtomicBoolean`)
 - Callbacks are only dispatched to public methods defined by the application, never to core Ruby methods
 - The socket is created owner-only, and the proxy refuses a socket owned by another user
 - A second server no longer takes over the socket of a running one
