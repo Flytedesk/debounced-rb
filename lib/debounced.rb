@@ -21,7 +21,7 @@ module Debounced
   end
 
   class Configuration
-    attr_accessor :socket_descriptor, :wait_timeout, :enable_trace_logging
+    attr_accessor :socket_descriptor, :wait_timeout, :enable_trace_logging, :error_handler
 
     def initialize
       @socket_descriptor = ENV['DEBOUNCED_SOCKET'] || '/tmp/app.debounceEvents'

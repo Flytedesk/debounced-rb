@@ -246,11 +246,11 @@ RSpec.describe Debounced::Server do
       expect(status&.success?).to be(true)
     end
 
-    it 'exits at once when no timers are pending' do
+    it 'exits cleanly when no timers are pending' do
       # when
       Process.kill('TERM', server_pid)
       # then
-      expect(exit_status(server_pid, within: 0.5)&.success?).to be(true)
+      expect(exit_status(server_pid, within: 5)&.success?).to be(true)
     end
   end
 

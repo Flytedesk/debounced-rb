@@ -1,3 +1,4 @@
+require 'concurrent/atomic/atomic_boolean'
 require 'socket'
 require 'json'
 
