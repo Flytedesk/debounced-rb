@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    debounced (2.0.0)
+    debounced (3.0.0)
       async (~> 2.46)
       concurrent-ruby (~> 1.0)
       io-event (~> 1.21)
