@@ -29,5 +29,4 @@ Gem::Specification.new do |gem|
 
   # Development dependencies
   gem.add_development_dependency "rspec", "~> 3.0"
-  gem.add_development_dependency "debug", "~> 1.0", ">= 1.0.0"
 end
